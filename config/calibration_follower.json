@@ -1,0 +1,65 @@
+{
+  "_comment": "从臂 my_follower 的校准快照，2026-10-18 从 _tools/hf-cache/lerobot/calibration/robots/so101_follower/my_follower.json 复制。换机械臂/重新校准后必须同步更新。",
+  "_source": "D:\\LeRobot\\_tools\\hf-cache\\lerobot\\calibration\\robots\\so101_follower\\my_follower.json",
+  "robot": "so101_follower",
+  "id": "my_follower",
+  "encoder_bits": 4096,
+  "joint_order": [
+    "shoulder_pan",
+    "shoulder_lift",
+    "elbow_flex",
+    "wrist_flex",
+    "wrist_roll",
+    "gripper"
+  ],
+  "joints": {
+    "shoulder_pan": {
+      "id": 1,
+      "drive_mode": 0,
+      "homing_offset": 144,
+      "range_min": 771,
+      "range_max": 3297,
+      "norm_mode": "m100_100"
+    },
+    "shoulder_lift": {
+      "id": 2,
+      "drive_mode": 0,
+      "homing_offset": 691,
+      "range_min": 862,
+      "range_max": 3228,
+      "norm_mode": "m100_100"
+    },
+    "elbow_flex": {
+      "id": 3,
+      "drive_mode": 0,
+      "homing_offset": -146,
+      "range_min": 842,
+      "range_max": 3044,
+      "norm_mode": "m100_100"
+    },
+    "wrist_flex": {
+      "id": 4,
+      "drive_mode": 0,
+      "homing_offset": 930,
+      "range_min": 927,
+      "range_max": 3078,
+      "norm_mode": "m100_100"
+    },
+    "wrist_roll": {
+      "id": 5,
+      "drive_mode": 0,
+      "homing_offset": -1022,
+      "range_min": 146,
+      "range_max": 3960,
+      "norm_mode": "m100_100"
+    },
+    "gripper": {
+      "id": 6,
+      "drive_mode": 0,
+      "homing_offset": 135,
+      "range_min": 1474,
+      "range_max": 2907,
+      "norm_mode": "0_100"
+    }
+  }
+}

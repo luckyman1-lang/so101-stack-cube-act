@@ -1,0 +1,93 @@
+﻿diff --git a/src/lerobot/record.py b/src/lerobot/record.py
+index 9fc0dc7..9519c2e 100644
+--- a/src/lerobot/record.py
++++ b/src/lerobot/record.py
+@@ -160,6 +160,13 @@ class RecordConfig:
+         return ["policy"]
+ 
+ 
++# [本地改动] 推理时落盘相机画面（供外部实时查看）。policy=None 时不生效。
++_LIVE_FRAME_DIR = r'D:\LeRobot\outputs\live'
++_LIVE_SAVE_EVERY = 15
++_LIVE_KEEP = 120
++_live_frame_counter = 0
++
++
+ @safe_stop_image_writer
+ def record_loop(
+     robot: Robot,
+@@ -205,8 +212,51 @@ def record_loop(
+             events["exit_early"] = False
+             break
+ 
++        # [本地改动] 空格暂停：暂停期间不采帧、不给从臂发指令，并把暂停时长
++        # 补偿回 start_episode_t，这样本轮剩余的录制时间不会被吃掉。
++        if events.get("paused"):
++            print(">>> 已暂停，按空格继续 <<<", flush=True)
++            t_pause_start = time.perf_counter()
++            while events.get("paused") and not events["exit_early"]:
++                time.sleep(0.05)
++            start_episode_t += time.perf_counter() - t_pause_start
++            if events["exit_early"]:
++                events["exit_early"] = False
++                break
++            print(">>> 已继续 <<<", flush=True)
++            continue
++
+         observation = robot.get_observation()
+ 
++        # [本地改动] 推理时落盘相机画面（供外部实时查看），不影响正常录制
++        if policy is not None:
++            global _live_frame_counter
++            _live_frame_counter += 1
++            if _LIVE_SAVE_EVERY and _live_frame_counter % _LIVE_SAVE_EVERY == 0:
++                try:
++                    import glob as _glob
++                    import os as _os
++
++                    import cv2 as _cv2
++
++                    _img = None
++                    for _k in ('observation.images.front', 'front'):
++                        if _k in observation:
++                            _img = observation[_k]
++                            break
++                    if _img is not None:
++                        _os.makedirs(_LIVE_FRAME_DIR, exist_ok=True)
++                        _cv2.imwrite(_os.path.join(_LIVE_FRAME_DIR, f"frame_{_live_frame_counter:06d}.jpg"), _img)
++                        if _LIVE_KEEP and _live_frame_counter % (_LIVE_SAVE_EVERY * 20) == 0:
++                            _files = sorted(_glob.glob(_os.path.join(_LIVE_FRAME_DIR, "frame_*.jpg")))
++                            for _f in _files[:-_LIVE_KEEP]:
++                                try:
++                                    _os.remove(_f)
++                                except OSError:
++                                    pass
++                except Exception:
++                    pass
++
+         if policy is not None or dataset is not None:
+             observation_frame = build_dataset_frame(dataset.features, observation, prefix="observation")
+ 
+@@ -308,6 +358,7 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
+ 
+     recorded_episodes = 0
+     while recorded_episodes < cfg.dataset.num_episodes and not events["stop_recording"]:
++        events["paused"] = False  # [本地改动] 每轮开始都确保不是暂停态
+         log_say(f"Recording episode {dataset.num_episodes}", cfg.play_sounds)
+         record_loop(
+             robot=robot,
+@@ -344,6 +395,14 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
+             dataset.clear_episode_buffer()
+             continue
+ 
++        # [本地改动] 空轮保护：若这一轮一帧都没录到（例如刚开始就按了 →），
++        # 原代码仍会调 save_episode()，被 validate_episode_buffer 抛
++        # ValueError 打断整个录制。这里改为丢弃这一轮、重新录，已录数据不受影响。
++        if dataset.episode_buffer is None or dataset.episode_buffer.get("size", 0) == 0:
++            print(">>> 本轮没录到任何帧，已丢弃并重新录制这一轮 <<<", flush=True)
++            dataset.clear_episode_buffer()
++            continue
++
+         dataset.save_episode()
+         recorded_episodes += 1
+ 

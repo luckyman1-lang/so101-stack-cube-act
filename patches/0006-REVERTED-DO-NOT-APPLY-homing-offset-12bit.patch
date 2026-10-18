@@ -1,0 +1,52 @@
+﻿diff --git a/src/lerobot/motors/feetech/feetech.py b/src/lerobot/motors/feetech/feetech.py
+index 88d45ba..5c50c09 100644
+--- a/src/lerobot/motors/feetech/feetech.py
++++ b/src/lerobot/motors/feetech/feetech.py
+@@ -254,9 +254,23 @@ class FeetechMotorsBus(MotorsBus):
+         for motor in self.motors:
+             mins[motor] = self.read("Min_Position_Limit", motor, normalize=False)
+             maxes[motor] = self.read("Max_Position_Limit", motor, normalize=False)
+-            offsets[motor] = (
+-                self.read("Homing_Offset", motor, normalize=False) if self.protocol_version == 0 else 0
+-            )
++            # [本地改动] Homing_Offset 的读取要特别处理：
++            #  1) read() 会走 _decode_sign，而它按 11 位符号-幅度解码负数，
++            #     但 Feetech 舵机的 Homing_Offset 实际是 12 位补码（-2048~2047）。
++            #     例如 raw 0xF4B(3915) 应解成 -181，read() 却给出 -1867。
++            #  2) 所以这里绕过 read()，用 _read 直接取原始 2 字节再按 12 位补码还原，
++            #     否则 is_calibrated 会把正确的校准判成 False（并触发无谓的重校准）。
++            if self.protocol_version == 0:
++                off_addr, off_len = get_address(
++                    self.model_ctrl_table, self.motors[motor].model, "Homing_Offset"
++                )
++                raw_offset, _, _ = self._read(
++                    off_addr, off_len, self.motors[motor].id, raise_on_error=True
++                )
++                v12 = raw_offset & 0x0FFF
++                offsets[motor] = v12 - 0x1000 if v12 > 0x7FF else v12
++            else:
++                offsets[motor] = 0
+ 
+         calibration = {}
+         for motor, m in self.motors.items():
+@@ -273,7 +287,19 @@ class FeetechMotorsBus(MotorsBus):
+     def write_calibration(self, calibration_dict: dict[str, MotorCalibration], cache: bool = True) -> None:
+         for motor, calibration in calibration_dict.items():
+             if self.protocol_version == 0:
+-                self.write("Homing_Offset", motor, calibration.homing_offset)
++                # [本地改动] Homing_Offset 是 12 位补码(-2048~2047)。不能走 write()，
++                # 因为它会用 _encode_sign 按 11 位符号-幅度编码负数（-538 会写成 2586，
++                # 舵机按 12 位补码解出来是 -1510），导致校准值实际偏差。这里直接写补码。
++                off_addr, off_len = get_address(
++                    self.model_ctrl_table, self.motors[motor].model, "Homing_Offset"
++                )
++                self._write(
++                    off_addr,
++                    off_len,
++                    self.motors[motor].id,
++                    calibration.homing_offset & 0x0FFF,
++                    raise_on_error=True,
++                )
+             self.write("Min_Position_Limit", motor, calibration.range_min)
+             self.write("Max_Position_Limit", motor, calibration.range_max)
+ 

@@ -1,0 +1,32 @@
+﻿diff --git a/src/lerobot/configs/policies.py b/src/lerobot/configs/policies.py
+index 05f3296..b020fb9 100644
+--- a/src/lerobot/configs/policies.py
++++ b/src/lerobot/configs/policies.py
+@@ -196,11 +196,24 @@ class PreTrainedConfig(draccus.ChoiceRegistry, HubMixin, abc.ABC):
+             config = json.load(f)
+ 
+         config.pop("type")
+-        with tempfile.NamedTemporaryFile("w+") as f:
++        cli_overrides = policy_kwargs.pop("cli_overrides", [])
++        # [本地改动] Windows 上 NamedTemporaryFile 是独占句柄，draccus 再 open 它必然
++        # PermissionError [Errno 13]。没有 cli 覆盖时直接 decode dict，完全不落临时文件。
++        if not cli_overrides:
++            with draccus.config_type("json"):
++                return draccus.decode(orig_config.__class__, config)
++        # 有 cli 覆盖时才走原路径（少见）
++        with tempfile.NamedTemporaryFile("w+", suffix=".json", delete=False) as f:
+             json.dump(config, f)
+             config_file = f.name
+             f.flush()
+-
+-            cli_overrides = policy_kwargs.pop("cli_overrides", [])
++        try:
+             with draccus.config_type("json"):
+                 return draccus.parse(orig_config.__class__, config_file, args=cli_overrides)
++        finally:
++            try:
++                import os as _os
++
++                _os.unlink(config_file)
++            except OSError:
++                pass

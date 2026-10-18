@@ -1,0 +1,144 @@
+{
+  "version": 8,
+  "project": "SO-101 任意位置物块堆叠",
+  "updated": "2026-10-18T17:30:00",
+  "updated_by": "A",
+  "members": {
+    "A": "本人",
+    "B": "队友"
+  },
+  "modules": [
+    {
+      "id": "M0",
+      "name": "标定与地基",
+      "desc": "相机视角调整、手眼外参标定、桌面坐标系",
+      "owner": "A",
+      "status": "doing",
+      "progress": 35,
+      "deps": [],
+      "note": "阻塞：相机 63.3° 太斜，需抬到 25~35°。其余已就绪。",
+      "updated_by": "A",
+      "updated_at": "2026-10-18T09:56:28.149Z"
+    },
+    {
+      "id": "M1",
+      "name": "感知 RGB-D → 3D",
+      "desc": "桌面平面拟合 + 凸起检测 + 顶面 3D 定位",
+      "owner": "A",
+      "status": "doing",
+      "progress": 70,
+      "deps": [
+        "M0"
+      ],
+      "note": "核心链路已验证（高度27.7/25.9mm，3D交叉验证差0.8/1.5mm，尺寸29.7mm对30mm）。阻塞项：相机63.3°太斜，需抬到25~35°，否则堆叠时遮挡。",
+      "updated_by": "A",
+      "updated_at": "2026-10-18T17:30:00"
+    },
+    {
+      "id": "M2",
+      "name": "运动学 FK/IK/轨迹",
+      "desc": "解析 IK + DLS 精化 + 关节限位 + 安全层",
+      "owner": "B",
+      "status": "doing",
+      "progress": 60,
+      "deps": [],
+      "note": "代码已交付并通过自检：IK 中位 0.075mm / 增量跟踪 0.028mm / 关节跳变 1.51°。待 B 做 T2(真机FK校验<5mm) 和 T3(安全层)。三个坑已记录在 docs/B_STARTUP_M2.md：①别用MJCF范围换算 ②SO-101是水平前伸抓取不是竖直向下 ③必须增量式IK",
+      "updated_by": "A",
+      "updated_at": "2026-10-18T17:30:00"
+    },
+    {
+      "id": "M3",
+      "name": "真机通用堆叠（集成）",
+      "desc": "状态机 + 视觉伺服对齐 + 抓取成功检测",
+      "owner": "A+B",
+      "status": "todo",
+      "progress": 0,
+      "deps": [
+        "M1",
+        "M2"
+      ],
+      "note": "验收：随机 20 位置成功率 ≥75%，<25s，无碰撞过载。",
+      "updated_by": "",
+      "updated_at": ""
+    },
+    {
+      "id": "M4",
+      "name": "MuJoCo 仿真环境",
+      "desc": "场景 + 域随机化 + gymnasium 接口",
+      "owner": "B",
+      "status": "todo",
+      "progress": 0,
+      "deps": [
+        "M2"
+      ],
+      "note": "验收：M1 感知代码原样跑仿真数据，位姿误差 <5mm。",
+      "updated_by": "",
+      "updated_at": ""
+    },
+    {
+      "id": "M5",
+      "name": "仿真 RL 训练",
+      "desc": "5A 状态 RL → 5B Residual RL → 5C 视觉 RL",
+      "owner": "B",
+      "status": "todo",
+      "progress": 0,
+      "deps": [
+        "M4"
+      ],
+      "note": "SAC。5A 仿真成功率 ≥90% 才做 5B。8G 显存约束并行 env 数。",
+      "updated_by": "",
+      "updated_at": ""
+    },
+    {
+      "id": "M6",
+      "name": "sim2real 迁移",
+      "desc": "冻结策略 + 限幅部署 + A/B 对照",
+      "owner": "A+B",
+      "status": "todo",
+      "progress": 0,
+      "deps": [
+        "M3",
+        "M5"
+      ],
+      "note": "修正量硬限幅 ±1.5cm。没提升就明确放弃 RL。",
+      "updated_by": "",
+      "updated_at": ""
+    },
+    {
+      "id": "M7",
+      "name": "评估与固化",
+      "desc": "100 次评测 + 报告 + 脚本封装 + 文档",
+      "owner": "A",
+      "status": "todo",
+      "progress": 0,
+      "deps": [
+        "M6"
+      ],
+      "note": "",
+      "updated_by": "",
+      "updated_at": ""
+    }
+  ],
+  "log": [
+    {
+      "time": "2026-10-18T16:45:00",
+      "who": "A",
+      "text": "建立看板。M0 阻塞于相机视角，M1 核心链路已验证。"
+    },
+    {
+      "time": "2026-10-18T16:27:00",
+      "who": "A",
+      "text": "深度相机实测通过：红/绿块均正确检测分类，3D 两种方法差 0.8/1.5mm。"
+    },
+    {
+      "time": "2026-10-18T15:20:00",
+      "who": "A",
+      "text": "SO-101 官方 MJCF/URDF 落地 assets/so101_sim，6 关节名与 LeRobot 完全一致。"
+    },
+    {
+      "time": "2026-10-18T17:30:00",
+      "who": "A",
+      "text": "交付 M2 启动包：kin/ 运动学模块 + docs/B_STARTUP_M2.md + tools/fake_perception.py。自检全过：IK 0.075mm、抓取位姿8/8、轨迹限速1.19、增量跟踪0.028mm。重要发现：用训练数据反推证明 SO-101 是水平前伸抓取（site z 轴与竖直夹角中位95°），不是竖直向下，此前假设被数据推翻。"
+    }
+  ]
+}

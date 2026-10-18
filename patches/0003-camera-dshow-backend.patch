@@ -1,0 +1,28 @@
+﻿diff --git a/src/lerobot/cameras/utils.py b/src/lerobot/cameras/utils.py
+index 1eb6984..f9f1c3f 100644
+--- a/src/lerobot/cameras/utils.py
++++ b/src/lerobot/cameras/utils.py
+@@ -14,6 +14,7 @@
+ # See the License for the specific language governing permissions and
+ # limitations under the License.
+ 
++import os
+ import platform
+ from pathlib import Path
+ from typing import TypeAlias
+@@ -59,6 +60,15 @@ def get_cv2_rotation(rotation: Cv2Rotation) -> int | None:
+ def get_cv2_backend() -> int:
+     import cv2
+ 
++    # [本地改动] 允许用环境变量 LEROBOT_CV2_BACKEND 覆盖 OpenCV 后端。
++    # 本机的 Orbbec Gemini 2 只有 DSHOW 后端能出图：MSMF 后端扫不到任何索引，
++    # 而 DSHOW 能正常拿到彩色画面。默认行为保持不变（Windows 仍用 MSMF）。
++    override = os.getenv("LEROBOT_CV2_BACKEND", "").strip().upper()
++    if override == "DSHOW":
++        return cv2.CAP_DSHOW
++    if override == "MSMF":
++        return cv2.CAP_MSMF
++
+     if platform.system() == "Windows":
+         return cv2.CAP_MSMF  # Use MSMF for Windows instead of AVFOUNDATION
+     # elif platform.system() == "Darwin":  # macOS

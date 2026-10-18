@@ -1,0 +1,49 @@
+﻿diff --git a/src/lerobot/utils/swanlab_utils.py b/src/lerobot/utils/swanlab_utils.py
+index 02d6cab..80a0771 100644
+--- a/src/lerobot/utils/swanlab_utils.py
++++ b/src/lerobot/utils/swanlab_utils.py
+@@ -85,16 +85,20 @@ class SwanLabLogger:
+             resume=cfg.resume,
+             mode=self.cfg.mode if self.cfg.mode in ["cloud", "offline", "local", "disabled"] else "cloud",
+         )
+-        run_id = self._run.public.run_id
++        # [本地改动] swanlab 0.10.2 的 Run 没有 .public，run id 直接在 .id 上
++        run_id = self._run.id
+         # NOTE: We will override the cfg.swanlab.run_id with the swanlab run id.
+         # This is because we want to be able to resume the run from the swanlab run id.
+         cfg.swanlab.run_id = run_id
+         # Handle custom step key for rl asynchronous training.
+         self._swanlab_custom_step_key: set[str] | None = None
+         print(colored("Logs will be synced with swanlab.", "blue", attrs=["bold"]))
+-        logging.info(
+-            f"Track this run --> {colored(self._run.public.cloud.experiment_url, 'yellow', attrs=['bold'])}"
+-        )
++        # [本地改动] offline/local 模式没有 experiment_url（0.10.2 读它会抛 ValueError）
++        try:
++            run_url = self._run.url
++        except Exception:
++            run_url = str(self.log_dir)
++        logging.info(f"Track this run --> {colored(run_url, 'yellow', attrs=['bold'])}")
+         self._swanlab = swanlab
+ 
+     def log_policy(self, checkpoint_dir: Path):
+@@ -102,13 +106,18 @@ class SwanLabLogger:
+         if self.cfg.disable_artifact:
+             return
+ 
++        # [本地改动] swanlab 0.10.2 要求 step 是 int；checkpoint 目录名是 '000100' 这种字符串
+         step_id = checkpoint_dir.name
++        try:
++            step_int = int(step_id)
++        except (TypeError, ValueError):
++            step_int = 0
+         artifact_name = f"{self._group}-{step_id}"
+         artifact_name = get_safe_swanlab_artifact_name(artifact_name)
+         # SwanLab doesn't have direct artifact logging like wandb
+         # We'll log the model file path as a text log for now
+         model_path = str(checkpoint_dir / PRETRAINED_MODEL_DIR / SAFETENSORS_SINGLE_FILE)
+-        self._swanlab.log({f"model_checkpoint": self._swanlab.Text(model_path)}, step=step_id)
++        self._swanlab.log({f"model_checkpoint": self._swanlab.Text(model_path)}, step=step_int)
+ 
+     def log_dict(
+         self, d: dict, step: int | None = None, mode: str = "train", custom_step_key: str | None = None

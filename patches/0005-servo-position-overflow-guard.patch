@@ -1,0 +1,115 @@
+﻿diff --git a/src/lerobot/motors/motors_bus.py b/src/lerobot/motors/motors_bus.py
+index 26522c7..f8b92d8 100644
+--- a/src/lerobot/motors/motors_bus.py
++++ b/src/lerobot/motors/motors_bus.py
+@@ -744,21 +744,31 @@ class MotorsBus(abc.ABC):
+         elif not isinstance(motors, list):
+             raise TypeError(motors)
+ 
++        # [本地改动] 只接受 12 位编码范围(0~4095)内的读数：偶发的通信错读会返回
++        # 超范围值（实测出现过 32918 / 33605），一旦被 min/max 记住，该关节的校准
++        # 跨度就会虚高，归一化后行程被压缩，遥操作时这个关节几乎不动。
+         start_positions = self.sync_read("Present_Position", motors, normalize=False)
+-        mins = start_positions.copy()
+-        maxes = start_positions.copy()
++        mins = {}
++        maxes = {}
++        for motor, pos in start_positions.items():
++            if 0 <= pos <= 4095:
++                mins[motor] = pos
++                maxes[motor] = pos
+ 
+         user_pressed_enter = False
+         while not user_pressed_enter:
+             positions = self.sync_read("Present_Position", motors, normalize=False)
+-            mins = {motor: min(positions[motor], min_) for motor, min_ in mins.items()}
+-            maxes = {motor: max(positions[motor], max_) for motor, max_ in maxes.items()}
++            for motor in motors:
++                pos = positions[motor]
++                if 0 <= pos <= 4095:
++                    mins[motor] = min(pos, mins.get(motor, pos))
++                    maxes[motor] = max(pos, maxes.get(motor, pos))
+ 
+             if display_values:
+                 print("\n-------------------------------------------")
+                 print(f"{'NAME':<15} | {'MIN':>6} | {'POS':>6} | {'MAX':>6}")
+                 for motor in motors:
+-                    print(f"{motor:<15} | {mins[motor]:>6} | {positions[motor]:>6} | {maxes[motor]:>6}")
++                    print(f"{motor:<15} | {mins.get(motor, -1):>6} | {positions[motor]:>6} | {maxes.get(motor, -1):>6}")
+ 
+             if enter_pressed():
+                 user_pressed_enter = True
+@@ -767,7 +777,7 @@ class MotorsBus(abc.ABC):
+                 # Move cursor up to overwrite the previous output
+                 move_cursor_up(len(motors) + 3)
+ 
+-        same_min_max = [motor for motor in motors if mins[motor] == maxes[motor]]
++        same_min_max = [motor for motor in motors if mins.get(motor) == maxes.get(motor)]
+         if same_min_max:
+             raise ValueError(f"Some motors have the same min and max values:\n{pformat(same_min_max)}")
+ 
+@@ -945,6 +955,12 @@ class MotorsBus(abc.ABC):
+         err_msg = f"Failed to read '{data_name}' on {id_=} after {num_retry + 1} tries."
+         value, _, _ = self._read(addr, length, id_, num_retry=num_retry, raise_on_error=True, err_msg=err_msg)
+ 
++        # [本地改动] 坏舵机保护：个别舵机的 Present_Position 会返回带异常高位的值
++        # （实测 33815 = 真实位置 1047 + 0x8000，等价于多圈计数器被写坏）。
++        # 12 位有效范围内只有低 0xFFF 有意义，裁掉高位，避免归一化被 clamp 到极限。
++        if data_name == "Present_Position" and isinstance(value, int) and value > 4095:
++            value &= 0x0FFF
++
+         id_value = self._decode_sign(data_name, {id_: value})
+ 
+         if normalize and data_name in self.normalized_data:
+@@ -988,7 +1004,7 @@ class MotorsBus(abc.ABC):
+         return value, comm, error
+ 
+     def write(
+-        self, data_name: str, motor: str, value: Value, *, normalize: bool = True, num_retry: int = 0
++        self, data_name: str, motor: str, value: Value, *, normalize: bool = True, num_retry: int = 3
+     ) -> None:
+         """Write a value to a single motor's register.
+ 
+@@ -1003,7 +1019,7 @@ class MotorsBus(abc.ABC):
+             value (Value): Value to write.  If *normalize* is `True` the value is first converted to raw
+                 units.
+             normalize (bool, optional): Enable or disable normalisation. Defaults to `True`.
+-            num_retry (int, optional): Retry attempts.  Defaults to `0`.
++            num_retry (int, optional): Retry attempts.  Defaults to `3`.
+         """
+         if not self.is_connected:
+             raise DeviceNotConnectedError(
+@@ -1056,7 +1072,7 @@ class MotorsBus(abc.ABC):
+         motors: str | list[str] | None = None,
+         *,
+         normalize: bool = True,
+-        num_retry: int = 0,
++        num_retry: int = 3,
+     ) -> dict[str, Value]:
+         """Read the same register from several motors at once.
+ 
+@@ -1064,7 +1080,7 @@ class MotorsBus(abc.ABC):
+             data_name (str): Register name.
+             motors (str | list[str] | None, optional): Motors to query. `None` (default) reads every motor.
+             normalize (bool, optional): Normalisation flag.  Defaults to `True`.
+-            num_retry (int, optional): Retry attempts.  Defaults to `0`.
++            num_retry (int, optional): Retry attempts.  Defaults to `3`.
+ 
+         Returns:
+             dict[str, Value]: Mapping *motor name → value*.
+@@ -1091,6 +1107,15 @@ class MotorsBus(abc.ABC):
+             addr, length, ids, num_retry=num_retry, raise_on_error=True, err_msg=err_msg
+         )
+ 
++        # [本地改动] 坏舵机保护：个别舵机的 Present_Position 会返回带异常高位的值
++        # （实测 33815 = 真实位置 1047 + 0x8000，等价于多圈计数器被写坏）。
++        # 12 位有效范围内只有低 0xFFF 有意义，裁掉高位，避免归一化被 clamp 到极限。
++        if data_name == "Present_Position":
++            ids_values = {
++                i: (v & 0x0FFF if isinstance(v, int) and v > 4095 else v)
++                for i, v in ids_values.items()
++            }
++
+         ids_values = self._decode_sign(data_name, ids_values)
+ 
+         if normalize and data_name in self.normalized_data:

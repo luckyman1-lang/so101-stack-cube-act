@@ -1,0 +1,39 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ---- 便携式运行时 / 依赖（7.3 GB，绝不入库）----
+_tools/
+!patches/
+
+# ---- 数据集与训练产物（746 MB + 14.8 GB）----
+datasets/
+outputs/
+Log/
+
+# ---- 抓拍图与临时文件（只保留代码，不保留图片）----
+_setup/cam_snapshots/
+_setup/_swanlab_probe/
+_tmp/
+*.npy
+*.jpg
+*.jpeg
+*.mp4
+
+# ---- 二进制安装包 / 资源（不进 git，太大）----
+*.tar.gz
+*.whl
+*.zip
+*.stl
+
+# ---- lerobot 源码：走上游仓库，本项目只保留 patches ----
+lerobot/
+
+# ---- 其他 ----
+*.log
+*.zip
+Thumbs.db
+.DS_Store

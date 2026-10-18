@@ -1,0 +1,20 @@
+# 安装约束：避免解析到与本项目代码不匹配的新主版本
+#
+# 1) opencv 5.0 刚发布，而摄像头采集完全依赖 OpenCV 的 MSMF 后端行为，
+#    教程对应 opencv 4.x，锁 4.x 降低"相机打不开/读不到帧"的风险。
+opencv-python-headless<5
+opencv-python<5
+
+# 2) LeRobot(2025-07 版) 是按 huggingface-hub 0.x 写的：
+#    pyproject 里要求 huggingface-hub[cli,hf-transfer]>=0.27.1，
+#    而 1.x 已经删掉了 cli / hf-transfer 这两个 extra（pip 会警告并跳过），
+#    并且 lerobot/utils/swanlab_utils.py 直接 import 了 0.x 里的常量。
+#    锁 0.x 最稳。
+huggingface-hub<1
+
+# 3) rerun 必须 <0.23：
+#    lerobot/utils/visualization_utils.py 用 rr.Scalar()，
+#    lerobot/scripts/visualize_dataset.py 用 rr.set_time_sequence()，
+#    这两个接口在新版 rerun 里已被删掉（Scalar -> Scalars，set_time_sequence -> set_time）。
+#    实测 rerun-sdk 0.39 下录制时一调用 log_rerun_data 就 AttributeError。
+rerun-sdk<0.23
